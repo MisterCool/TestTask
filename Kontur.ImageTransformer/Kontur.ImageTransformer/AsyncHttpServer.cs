@@ -34,8 +34,8 @@ namespace Kontur.ImageTransformer
                         Priority = ThreadPriority.Highest
                     };
                     listenerThread.Start();
-                    DelContext del = HandleContextAsync;
-                    QueueHandler(del, queueContext);
+                    DelContext del = HandleContextAsync; 
+                    QueueHandler(del, queueContext); //обработка очереди
                     isRunning = true;
                 }
             }
