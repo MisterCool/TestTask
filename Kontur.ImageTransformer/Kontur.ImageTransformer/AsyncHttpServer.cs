@@ -9,6 +9,7 @@ using System.Net;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+
 namespace Kontur.ImageTransformer
 {
     internal class AsyncHttpServer : IDisposable
@@ -68,7 +69,7 @@ namespace Kontur.ImageTransformer
 
             listener.Close();
         }
-        private static int limitTask = 15;
+       
         private void Listen()
         {
             while (true)
@@ -82,13 +83,14 @@ namespace Kontur.ImageTransformer
                         if (queueContext.Count() > limitRequest)
                         {
                             context.Response.StatusCode = (int)HttpStatusCode.ServiceUnavailable;
+                            context.Response.OutputStream.Close();
                             context.Response.Close();
                         }
                         else
                         {
                             queueContext.Enqueue(context);
                         }
-
+                        Console.WriteLine(countTask);
                     }
                     else Thread.Sleep(0);
 
@@ -112,70 +114,84 @@ namespace Kontur.ImageTransformer
                     if (countTask < limitTask && queueContext.TryDequeue(out HttpListenerContext context))
                     {
                         Interlocked.Increment(ref countTask);
-                        var task = Task.Run(() => del.Invoke(context)).ContinueWith(delegate { Interlocked.Decrement(ref countTask); });
-                        var timeOfProcessing = TimeSpan.FromMilliseconds(1000);
-                        if (!task.Wait(timeOfProcessing))
+                        Task.Run(() =>
                         {
-                            context.Response.StatusCode = 429;
-                            context.Response.Close();
-                        }
+                            var task = del.Invoke(context);
+                            var timeOfProcessing = TimeSpan.FromMilliseconds(1000);
+                            if (!task.Wait(timeOfProcessing))
+                            {
+                                context.Response.StatusCode = 429;
+                                context.Response.OutputStream.Close();
+                                context.Response.Close();
+                            }
+
+                        }).ContinueWith(t => Interlocked.Decrement(ref countTask));
                     }
                 }
             });
         }
-        private async Task HandleContextAsync(HttpListenerContext listenerContext)
+        private Task HandleContextAsync(HttpListenerContext listenerContext)
         {
-            if (!ValidationRequest.CheckCorrectnessOfTheRequest(listenerContext.Request))
-            {
-                listenerContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-                listenerContext.Response.Close();
-            }
-            var request = listenerContext.Request;
-            var stream = request.InputStream;
-            var imageBit = new Bitmap(stream);
-            var url = new Uri(request.Url.ToString());
-            var array = url.Segments;
-            var coordsString = url.Segments.Last();
-            var filter = url.Segments[url.Segments.Count() - 2].Remove(url.Segments[url.Segments.Count() - 2].Length - 1, 1);
+            return Task.Run(() =>
+             {
+                 var request = listenerContext.Request;
+                 var imageBit = new Bitmap(request.InputStream);
+                 if (!(ValidationRequest.CheckCorrectnessOfTheRequest(listenerContext.Request) && imageBit.RawFormat.Equals(ImageFormat.Png)))
+                 {
+                     listenerContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                     listenerContext.Response.OutputStream.Close();
+                     listenerContext.Response.Close();
+                 }
+                 else
+                 {
+                     var url = new Uri(request.Url.ToString());
+                     var array = url.Segments;
+                     var coordsString = url.Segments.Last();
+                     var filter = url.Segments[url.Segments.Count() - 2].Remove(url.Segments[url.Segments.Count() - 2].Length - 1, 1);
 
-            var coordsStringSplit = coordsString.Split(',');
-            var coords = new int[4];
-            for (var i = 0; i < coords.Length; i++)
-                coords[i] = int.Parse(coordsStringSplit[i]);
+                     var coordsStringSplit = coordsString.Split(',');
+                     var coords = new int[4];
+                     for (var i = 0; i < coords.Length; i++)
+                         coords[i] = int.Parse(coordsStringSplit[i]);
 
-            switch (filter)
-            {
-                case "sepia":
-                    Filter.ApplyFilter(imageBit, filter);
-                    break;
-                case "grayscale":
-                    Filter.ApplyFilter(imageBit, filter);
-                    break;
-                default:
-                    var arr = filter.Split('(', ')');
-                    var x = int.Parse(arr[1]);
-                    Filter.ApplyFilter(imageBit, filter);
-                    break;
-            }
+                     switch (filter)
+                     {
+                         case "sepia":
+                             Filter.ApplyFilter(imageBit, filter);
+                             break;
+                         case "grayscale":
+                             Filter.ApplyFilter(imageBit, filter);
+                             break;
+                         default:
+                             var arr = filter.Split('(', ')');
+                             var x = int.Parse(arr[1]);
+                             Filter.ApplyFilter(imageBit, filter);
+                             break;
+                     }
 
-            var rectangleImage = new Rectangle(0, 0, imageBit.Width, imageBit.Height);
-            var rectangleCoords = new Rectangle(coords[0], coords[1], coords[2], coords[3]);
+                     var rectangleImage = new Rectangle(0, 0, imageBit.Width, imageBit.Height);
+                     var rectangleCoords = new Rectangle(coords[0], coords[1], coords[2], coords[3]);
 
-            var imageInterSect = Rectangle.Intersect(rectangleImage, rectangleCoords);
-            if (imageInterSect == Rectangle.Empty)
-            {
-                listenerContext.Response.StatusCode = (int)HttpStatusCode.NoContent;
-                listenerContext.Response.Close();
-            }
-
-            listenerContext.Response.StatusCode = (int)HttpStatusCode.OK;
-            listenerContext.Response.ContentType = "image/png";
-
-            var iBit = imageBit.Clone(imageInterSect, imageBit.PixelFormat);
-            iBit.Save(listenerContext.Response.OutputStream, ImageFormat.Png);
-            listenerContext.Response.Close();
+                     var imageInterSect = Rectangle.Intersect(rectangleImage, rectangleCoords);
+                     if (imageInterSect == Rectangle.Empty)
+                     {
+                         listenerContext.Response.StatusCode = (int)HttpStatusCode.NoContent;
+                         listenerContext.Response.OutputStream.Close();
+                         listenerContext.Response.Close();
+                     }
+                     else
+                     {
+                         listenerContext.Response.StatusCode = (int)HttpStatusCode.OK;
+                         listenerContext.Response.ContentType = "image/png";
+                         var iBit = imageBit.Clone(imageInterSect, imageBit.PixelFormat);
+                         iBit.Save(listenerContext.Response.OutputStream, ImageFormat.Png);
+                         listenerContext.Response.OutputStream.Close();
+                         listenerContext.Response.Close();
+                     }
+                 }
+             });
         }
-
+        private static int limitTask = 100;
         private delegate Task DelContext(HttpListenerContext context);
         private readonly HttpListener listener;
         private Thread listenerThread;
