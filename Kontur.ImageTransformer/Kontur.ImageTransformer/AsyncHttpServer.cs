@@ -1,4 +1,4 @@
-﻿using CheckRequest;
+using CheckRequest;
 using FilterForImage;
 using System;
 using System.Collections.Concurrent;
@@ -27,15 +27,15 @@ namespace Kontur.ImageTransformer
                     listener.Prefixes.Clear();
                     listener.Prefixes.Add(prefix);
                     listener.Start();
-                   
+
                     listenerThread = new Thread(Listen)
                     {
                         IsBackground = true,
                         Priority = ThreadPriority.Highest
                     };
                     listenerThread.Start();
-                    DelContext del = HandleContextAsync; 
-                    QueueHandler(del, queueContext); //обработка очереди
+                    DelContext del = HandleContextAsync;
+                    QueueHandler(del, queueContext);
                     isRunning = true;
                 }
             }
@@ -78,22 +78,17 @@ namespace Kontur.ImageTransformer
                     if (listener.IsListening)
                     {
                         var context = listener.GetContext();
-                        DelContext del = HandleContextAsync;
                         var limitRequest = 50;
                         if (queueContext.Count() > limitRequest)
                         {
                             context.Response.StatusCode = (int)HttpStatusCode.ServiceUnavailable;
                             context.Response.Close();
                         }
-                        if (countTask < limitTask)
-                        {
-                            RequestHandler(del, context);
-                        }
-                        else 
+                        else
                         {
                             queueContext.Enqueue(context);
                         }
-                       
+
                     }
                     else Thread.Sleep(0);
 
@@ -108,18 +103,6 @@ namespace Kontur.ImageTransformer
                 //}
             }
         }
-        private static void RequestHandler(DelContext del, HttpListenerContext context)
-        {
-            Interlocked.Increment(ref countTask);
-            var task = Task.Run(() => del.Invoke(context)).ContinueWith(delegate { Interlocked.Decrement(ref countTask); });
-            var timeOfProcessing = TimeSpan.FromMilliseconds(1000);
-            if (!task.Wait(timeOfProcessing))
-            {
-                context.Response.StatusCode = (int)HttpStatusCode.ServiceUnavailable;
-                context.Response.Close();
-            }
-          
-        }
         private static void QueueHandler(DelContext del, ConcurrentQueue<HttpListenerContext> queueContext)
         {
             Task.Run(() =>
@@ -127,7 +110,16 @@ namespace Kontur.ImageTransformer
                 while (true)
                 {
                     if (countTask < limitTask && queueContext.TryDequeue(out HttpListenerContext context))
-                        RequestHandler(del, context);
+                    {
+                        Interlocked.Increment(ref countTask);
+                        var task = Task.Run(() => del.Invoke(context)).ContinueWith(delegate { Interlocked.Decrement(ref countTask); });
+                        var timeOfProcessing = TimeSpan.FromMilliseconds(1000);
+                        if (!task.Wait(timeOfProcessing))
+                        {
+                            context.Response.StatusCode = 429;
+                            context.Response.Close();
+                        }
+                    }
                 }
             });
         }
