@@ -9,7 +9,6 @@ using System.Net;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-
 namespace Kontur.ImageTransformer
 {
     internal class AsyncHttpServer : IDisposable
