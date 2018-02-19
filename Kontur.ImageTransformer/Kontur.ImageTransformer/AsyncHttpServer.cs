@@ -89,7 +89,6 @@ namespace Kontur.ImageTransformer
                         {
                             queueContext.Enqueue(context);
                         }
-                        Console.WriteLine(countTask);
                     }
                     else Thread.Sleep(0);
 
