@@ -1,14 +1,15 @@
-using CheckRequest;
-using FilterForImage;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Linq;
 using System.Net;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using ValidationRequest;
+
 namespace Kontur.ImageTransformer
 {
     internal class AsyncHttpServer : IDisposable
@@ -68,7 +69,7 @@ namespace Kontur.ImageTransformer
 
             listener.Close();
         }
-       
+
         private void Listen()
         {
             while (true)
@@ -131,65 +132,53 @@ namespace Kontur.ImageTransformer
         private Task HandleContextAsync(HttpListenerContext listenerContext)
         {
             return Task.Run(() =>
-             {
-                 var request = listenerContext.Request;
-                 var imageBit = new Bitmap(request.InputStream);
-                 if (!(ValidationRequest.CheckCorrectnessOfTheRequest(listenerContext.Request) && imageBit.RawFormat.Equals(ImageFormat.Png)))
-                 {
-                     listenerContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
-                     listenerContext.Response.OutputStream.Close();
-                     listenerContext.Response.Close();
-                 }
-                 else
-                 {
-                     var url = new Uri(request.Url.ToString());
-                     var array = url.Segments;
-                     var coordsString = url.Segments.Last();
-                     var filter = url.Segments[url.Segments.Count() - 2].Remove(url.Segments[url.Segments.Count() - 2].Length - 1, 1);
-
-                     var coordsStringSplit = coordsString.Split(',');
-                     var coords = new int[4];
-                     for (var i = 0; i < coords.Length; i++)
-                         coords[i] = int.Parse(coordsStringSplit[i]);
-
-                     switch (filter)
-                     {
-                         case "sepia":
-                             Filter.ApplyFilter(imageBit, filter);
-                             break;
-                         case "grayscale":
-                             Filter.ApplyFilter(imageBit, filter);
-                             break;
-                         default:
-                             var arr = filter.Split('(', ')');
-                             var x = int.Parse(arr[1]);
-                             Filter.ApplyFilter(imageBit, filter);
-                             break;
-                     }
-
-                     var rectangleImage = new Rectangle(0, 0, imageBit.Width, imageBit.Height);
-                     var rectangleCoords = new Rectangle(coords[0], coords[1], coords[2], coords[3]);
-
-                     var imageInterSect = Rectangle.Intersect(rectangleImage, rectangleCoords);
-                     if (imageInterSect == Rectangle.Empty)
-                     {
-                         listenerContext.Response.StatusCode = (int)HttpStatusCode.NoContent;
-                         listenerContext.Response.OutputStream.Close();
-                         listenerContext.Response.Close();
-                     }
-                     else
-                     {
-                         listenerContext.Response.StatusCode = (int)HttpStatusCode.OK;
-                         listenerContext.Response.ContentType = "image/png";
-                         var iBit = imageBit.Clone(imageInterSect, imageBit.PixelFormat);
-                         iBit.Save(listenerContext.Response.OutputStream, ImageFormat.Png);
-                         listenerContext.Response.OutputStream.Close();
-                         listenerContext.Response.Close();
-                     }
-                 }
-             });
+              {
+                  var request = listenerContext.Request;
+                  var info = new RequestInfo(request);
+                  var results = new List<ValidationResult>();
+                  var context = new ValidationContext(info);
+                  if (!Validator.TryValidateObject(info, context, results, true))
+                  {
+                      listenerContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                      listenerContext.Response.OutputStream.Close();
+                      listenerContext.Response.Close();
+                  }
+                  var coords = new int[4];
+                  for (var i = 0; i < coords.Length; i++)
+                      coords[i] = int.Parse(info.Coords.Split(',')[i]);
+                  var rectangleImage = new Rectangle(0, 0, info.RequestBody.Width, info.RequestBody.Height);
+                  var rectangleCoords = new Rectangle(coords[0], coords[1], coords[2], coords[3]);
+                  var imageInterSect = Rectangle.Intersect(rectangleImage, rectangleCoords);
+                  if (imageInterSect == Rectangle.Empty)
+                  {
+                      listenerContext.Response.StatusCode = (int)HttpStatusCode.NoContent;
+                      listenerContext.Response.OutputStream.Close();
+                      listenerContext.Response.Close();
+                  }
+                  switch (info.Transform)
+                  {
+                      case "rotate-cw":
+                          info.RequestBody.RotateFlip(RotateFlipType.Rotate90FlipNone);
+                          break;
+                      case "rotate-ccw":
+                          info.RequestBody.RotateFlip(RotateFlipType.Rotate270FlipNone);
+                          break;
+                      case "flip-h":
+                          info.RequestBody.RotateFlip(RotateFlipType.RotateNoneFlipX);
+                          break;
+                      case "flip-v":
+                          info.RequestBody.RotateFlip(RotateFlipType.RotateNoneFlipY);
+                          break;
+                  }
+                  listenerContext.Response.ContentType = "image/png";
+                  listenerContext.Response.StatusCode = (int)HttpStatusCode.OK;
+                  var iBit = info.RequestBody.Clone(imageInterSect, info.RequestBody.PixelFormat);
+                  iBit.Save(listenerContext.Response.OutputStream, ImageFormat.Png);
+                  listenerContext.Response.OutputStream.Close();
+                  listenerContext.Response.Close();
+              });
         }
-        private static int limitTask = 100;
+        private static int limitTask = 50;
         private delegate Task DelContext(HttpListenerContext context);
         private readonly HttpListener listener;
         private Thread listenerThread;
