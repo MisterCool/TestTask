@@ -5,7 +5,7 @@ VisualStudioVersion = 15.0.27130.2010
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kontur.ImageTransformer", "Kontur.ImageTransformer\Kontur.ImageTransformer.csproj", "{9801585B-D1AA-4078-B9C4-7B7F8883E55E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CorrectnessOfTheRequest", "Kontur.ImageTransformer\ValidationRequest\CorrectnessOfTheRequest.csproj", "{709FD8DB-CDD3-4A5B-B04C-AFF81DB9BFE5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ValidationRequest", "Kontur.ImageTransformer\ValidationRequest\ValidationRequest.csproj", "{709FD8DB-CDD3-4A5B-B04C-AFF81DB9BFE5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

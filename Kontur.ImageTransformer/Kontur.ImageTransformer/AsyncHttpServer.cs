@@ -87,9 +87,8 @@ namespace Kontur.ImageTransformer
                             context.Response.Close();
                         }
                         else
-                        {
                             queueContext.Enqueue(context);
-                        }
+                        
                     }
                     else Thread.Sleep(0);
 
@@ -98,10 +97,6 @@ namespace Kontur.ImageTransformer
                 {
                     return;
                 }
-                //catch (Exception error)
-                //{
-                //    // TODO: log errors
-                //}
             }
         }
         private static void QueueHandler(DelContext del, ConcurrentQueue<HttpListenerContext> queueContext)
@@ -129,6 +124,7 @@ namespace Kontur.ImageTransformer
                 }
             });
         }
+
         private Task HandleContextAsync(HttpListenerContext listenerContext)
         {
             return Task.Run(() =>
@@ -142,18 +138,7 @@ namespace Kontur.ImageTransformer
                       listenerContext.Response.StatusCode = (int)HttpStatusCode.BadRequest;
                       listenerContext.Response.OutputStream.Close();
                       listenerContext.Response.Close();
-                  }
-                  var coords = new int[4];
-                  for (var i = 0; i < coords.Length; i++)
-                      coords[i] = int.Parse(info.Coords.Split(',')[i]);
-                  var rectangleImage = new Rectangle(0, 0, info.RequestBody.Width, info.RequestBody.Height);
-                  var rectangleCoords = new Rectangle(coords[0], coords[1], coords[2], coords[3]);
-                  var imageInterSect = Rectangle.Intersect(rectangleImage, rectangleCoords);
-                  if (imageInterSect == Rectangle.Empty)
-                  {
-                      listenerContext.Response.StatusCode = (int)HttpStatusCode.NoContent;
-                      listenerContext.Response.OutputStream.Close();
-                      listenerContext.Response.Close();
+                      return;
                   }
                   switch (info.Transform)
                   {
@@ -170,15 +155,29 @@ namespace Kontur.ImageTransformer
                           info.RequestBody.RotateFlip(RotateFlipType.RotateNoneFlipY);
                           break;
                   }
+                  var coords = new int[4];
+                  for (var i = 0; i < coords.Length; i++)
+                      coords[i] = int.Parse(info.Coords.Split(',')[i]);
+                  var rectangleImage = new Rectangle(0, 0, info.RequestBody.Width, info.RequestBody.Height);
+                  var rectangleCoords = new Rectangle(coords[0], coords[1], coords[2], coords[3]);
+                  var imageInterSect = Rectangle.Intersect(rectangleImage, rectangleCoords);
+                  if (imageInterSect == Rectangle.Empty)
+                  {
+                      listenerContext.Response.StatusCode = (int)HttpStatusCode.NoContent;
+                      listenerContext.Response.OutputStream.Close();
+                      listenerContext.Response.Close();
+                      return;
+                  }
                   listenerContext.Response.ContentType = "image/png";
                   listenerContext.Response.StatusCode = (int)HttpStatusCode.OK;
                   var iBit = info.RequestBody.Clone(imageInterSect, info.RequestBody.PixelFormat);
                   iBit.Save(listenerContext.Response.OutputStream, ImageFormat.Png);
                   listenerContext.Response.OutputStream.Close();
                   listenerContext.Response.Close();
+                  return;
               });
         }
-        private static int limitTask = 50;
+        private const int limitTask = 50;
         private delegate Task DelContext(HttpListenerContext context);
         private readonly HttpListener listener;
         private Thread listenerThread;

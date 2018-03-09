@@ -80,9 +80,9 @@
     <WCFMetadata Include="Connected Services\" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="ValidationRequest\CorrectnessOfTheRequest.csproj">
+    <ProjectReference Include="ValidationRequest\ValidationRequest.csproj">
       <Project>{709FD8DB-CDD3-4A5B-B04C-AFF81DB9BFE5}</Project>
-      <Name>CorrectnessOfTheRequest</Name>
+      <Name>ValidationRequest</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

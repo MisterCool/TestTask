@@ -20,7 +20,7 @@ namespace ValidationRequest
         }
         private static bool ValidCoords(string inputString)
         {
-            var pattern = @"^\d+[,]\d+[,]\d+[,]\d+\z";
+            var pattern = @"^(-?\d+),(-?\d+),(-?\d+),(-?\d+)\z";
 
             return Regex.IsMatch(inputString, pattern);
         }
@@ -32,8 +32,11 @@ namespace ValidationRequest
         }
         private static bool OtherChecks(RequestInfo info)
         {
-            return info.ContentLength < 100000 && info.ContentType == "application/octet-stream" && 
-                info.RequestBody.Height < 1000 && info.RequestBody.Width < 1000 && info.HttpMethod == "POST";
+            var maxBodySize = 100000;
+            var maxHeight = 1000;
+            var maxWidth = 1000;
+            return info.ContentLength < maxBodySize && info.RequestBody.Height < maxHeight && 
+                info.RequestBody.Width < maxWidth && info.HttpMethod == "POST";
         }
     }
     [RequestInfoValidation]
@@ -46,7 +49,7 @@ namespace ValidationRequest
         public readonly Bitmap RequestBody;
         public readonly string ContentType;
         public RequestInfo(HttpListenerRequest request)
-        { 
+        {
             var url = new Uri(request.Url.ToString());
             Transform = url.Segments[url.Segments.Count() - 2].Remove(url.Segments[url.Segments.Count() - 2].Length - 1, 1);
             RequestBody = new Bitmap(request.InputStream);
